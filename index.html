@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamVerse | VidPlus Anime Player</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.10/plyr.css" />
+    <style>
+        body { background-color: #0b0f19; color: #f3f4f6; }
+        .aspect-video { aspect-ratio: 16 / 9; }
+        .search-results {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .anime-item {
+            padding: 12px;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .anime-item:hover {
+            background-color: #1f2937;
+            border-color: #6366f1;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #4b5563;
+            border-radius: 50%;
+            border-top-color: #6366f1;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="font-sans antialiased min-h-screen flex flex-col">
+
+    <header class="border-b border-gray-800 bg-gray-950/50 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <h1 class="text-2xl font-bold tracking-wider text-indigo-500 cursor-pointer" onclick="location.reload()">
+                VID<span class="text-white">PLUS</span> ANIME
+            </h1>
+            
+            <div class="flex items-center gap-3 w-full sm:w-auto relative">
+                <input type="text" id="searchInput" placeholder="Search anime..." 
+                    class="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-indigo-500 w-full sm:w-64">
+                
+                <button onclick="searchAnime()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-5 py-2 rounded-lg transition">
+                    Search
+                </button>
+
+                <div id="searchResults" class="search-results hidden absolute top-full mt-2 w-80 bg-gray-900 border border-gray-700 rounded-lg shadow-xl right-0 z-10"></div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6">
+        
+        <!-- Selected Anime Info -->
+        <div id="animeInfo" class="hidden mb-6 bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h2 id="animeTitle" class="text-2xl font-bold text-indigo-400 mb-2"></h2>
+                    <p id="animeDescription" class="text-sm text-gray-300 mb-4 max-w-2xl"></p>
+                </div>
+                <button onclick="clearSelection()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+
+            <!-- Episode/Season Controls -->
+            <div class="flex flex-wrap gap-3 items-center">
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1 font-medium">Episode</label>
+                    <select id="episodeSelect" class="bg-gray-950 border border-gray-700 rounded-lg px-3 py-1.5 text-sm">
+                        <option>Loading episodes...</option>
+                    </select>
+                </div>
+                <button onclick="loadEpisode()" class="mt-5 bg-indigo-600 hover:bg-indigo-500 text-sm px-4 py-1.5 rounded-lg transition font-medium">
+                    Play
+                </button>
+            </div>
+        </div>
+
+        <!-- Video Player -->
+        <div class="bg-gray-950 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl">
+            <div class="aspect-video w-full relative bg-black">
+                <video id="videoPlayer" controls class="w-full h-full" playsinline></video>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="hidden mt-6 text-center">
+            <div class="inline-block loading"></div>
+            <p class="text-gray-400 mt-4">Loading stream...</p>
+        </div>
+    </main>
+
+    <script src="https://cdn.plyr.io/3.7.10/plyr.js"></script>
+    <script>
+        // ⚠️ IMPORTANT: Change this to your Railway backend URL after deployment
+        const BACKEND_URL = 'http://localhost:5000';
+        
+        let player;
+        let currentAnime = null;
+        let currentEpisodes = [];
+
+        // Initialize Plyr player
+        document.addEventListener('DOMContentLoaded', () => {
+            player = new Plyr('#videoPlayer', {
+                controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'captions', 'settings', 'pip', 'airplay', 'fullscreen'],
+                speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] }
+            });
+        });
+
+        async function searchAnime() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) return;
+
+            const resultsDiv = document.getElementById('searchResults');
+            resultsDiv.innerHTML = '<div class="p-4"><div class="inline-block loading"></div></div>';
+            resultsDiv.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+
+                if (data.results && data.results.length > 0) {
+                    resultsDiv.innerHTML = data.results.slice(0, 10).map(anime => `
+                        <div class="anime-item" onclick="selectAnime('${anime.id}', '${anime.title.replace(/'/g, "\\'")}')">
+                            <p class="font-semibold text-sm">${anime.title}</p>
+                            <p class="text-xs text-gray-400">${anime.releaseDate || 'N/A'}</p>
+                        </div>
+                    `).join('');
+                } else {
+                    resultsDiv.innerHTML = '<p class="p-4 text-gray-400">No results found</p>';
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<p class="p-4 text-red-400">Error: ${error.message}</p>`;
+                console.error('Search error:', error);
+            }
+        }
+
+        async function selectAnime(id, title) {
+            currentAnime = { id, title };
+            document.getElementById('searchResults').classList.add('hidden');
+            document.getElementById('animeInfo').classList.remove('hidden');
+            document.getElementById('animeTitle').textContent = title;
+            document.getElementById('animeDescription').textContent = 'Loading info...';
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/info/${id}`);
+                const data = await response.json();
+
+                document.getElementById('animeDescription').textContent = data.description || 'No description available';
+                currentEpisodes = data.episodes || [];
+
+                const episodeSelect = document.getElementById('episodeSelect');
+                episodeSelect.innerHTML = currentEpisodes.map((ep, idx) => `
+                    <option value="${idx}">${ep.number ? 'Ep. ' + ep.number : 'Episode ' + (idx + 1)}</option>
+                `).join('');
+
+                if (currentEpisodes.length === 0) {
+                    episodeSelect.innerHTML = '<option>No episodes found</option>';
+                }
+            } catch (error) {
+                document.getElementById('animeDescription').textContent = 'Error loading anime info';
+                console.error('Info error:', error);
+            }
+        }
+
+        async function loadEpisode() {
+            if (!currentAnime || currentEpisodes.length === 0) return;
+
+            const episodeIdx = parseInt(document.getElementById('episodeSelect').value);
+            const episode = currentEpisodes[episodeIdx];
+
+            document.getElementById('loading').classList.remove('hidden');
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/watch/${episode.id}`);
+                const data = await response.json();
+
+                // Get the first available source
+                if (data.sources && data.sources.length > 0) {
+                    const source = data.sources[0];
+                    player.source = {
+                        type: 'video',
+                        sources: [{
+                            src: source.url,
+                            type: source.quality || 'video/mp4'
+                        }]
+                    };
+                } else {
+                    alert('No sources found for this episode');
+                }
+            } catch (error) {
+                alert('Error loading episode: ' + error.message);
+                console.error('Watch error:', error);
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+
+        function clearSelection() {
+            currentAnime = null;
+            currentEpisodes = [];
+            document.getElementById('animeInfo').classList.add('hidden');
+            document.getElementById('searchInput').value = '';
+            document.getElementById('searchResults').classList.add('hidden');
+            player.source = { type: 'video', sources: [] };
+        }
+
+        // Search on Enter key
+        document.getElementById('searchInput')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchAnime();
+        });
+    </script>
+</body>
+</html>
