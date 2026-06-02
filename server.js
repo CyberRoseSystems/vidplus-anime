@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const cheerio = require('cheerio');
 
 const app = express();
 app.use(cors());
@@ -112,34 +111,20 @@ function generateEpisodes(count) {
   return episodes;
 }
 
-// Get streaming links - using multiple sources
+// Get streaming links
 app.get('/watch/:episodeId', async (req, res) => {
   try {
     const episodeId = req.params.episodeId;
     console.log(`Getting watch link for: ${episodeId}`);
     
-    // Return streaming sources from various providers
+    // Return streaming sources
     const sources = [
       {
-        url: 'https://example.com/stream1.mp4',
+        url: 'https://vjs.zencdn.net/v/oceans.mp4',
         quality: 'video/mp4',
-        provider: 'Primary'
+        provider: 'Demo'
       }
     ];
-
-    // Try to get real streaming link from GogoAnime via reverse proxy
-    try {
-      const gogoanimeLink = await getGogoAnimeLink(episodeId);
-      if (gogoanimeLink) {
-        sources.push({
-          url: gogoanimeLink,
-          quality: 'video/mp4',
-          provider: 'GogoAnime'
-        });
-      }
-    } catch (err) {
-      console.log('GogoAnime source unavailable:', err.message);
-    }
 
     console.log(`Found ${sources.length} streaming sources`);
     res.json({ sources });
@@ -149,57 +134,12 @@ app.get('/watch/:episodeId', async (req, res) => {
   }
 });
 
-// Helper function to get GogoAnime streaming link
-async function getGogoAnimeLink(episodeId) {
-  try {
-    // This is a placeholder - real implementation would scrape GogoAnime
-    // For now, return a demo link
-    return 'https://video.cdn.example.com/anime-stream.mp4';
-  } catch (error) {
-    throw new Error('Could not fetch GogoAnime link');
-  }
-}
-
-// Alternative: Use direct streaming API
-app.get('/stream/:animeTitle/:episode', async (req, res) => {
-  try {
-    const { animeTitle, episode } = req.params;
-    console.log(`Streaming: ${animeTitle} - Episode ${episode}`);
-    
-    // Get from Jikan first
-    const animeResponse = await axios.get(`${JIKAN_API}/anime?query=${animeTitle}&limit=1`, {
-      timeout: 10000
-    });
-
-    if (animeResponse.data.data.length > 0) {
-      const anime = animeResponse.data.data[0];
-      
-      // Build a streaming URL (this is a placeholder)
-      const streamingUrl = `https://stream.example.com/${anime.mal_id}/${episode}`;
-      
-      res.json({
-        success: true,
-        anime: anime.title,
-        episode: episode,
-        url: streamingUrl,
-        source: 'anime-streaming-api'
-      });
-    } else {
-      res.status(404).json({ error: 'Anime not found' });
-    }
-  } catch (error) {
-    console.error('Stream error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Backend is running with Jikan integration' });
+  res.json({ status: 'OK', message: 'Backend is running' });
 });
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log('Using AniList for search + Jikan for anime data');
 });
