@@ -99,7 +99,7 @@
         </div>
     </main>
 
-    <script src="https://cdn.plyr.io/3.7.10/plyr.js"></script>
+    <script src="https://cdn.plyr.io/3.7.10/plyr.js" async></script>
     <script>
         // Your Railway backend URL
         const BACKEND_URL = 'https://vidplus-anime-production.up.railway.app';
@@ -108,13 +108,23 @@
         let currentAnime = null;
         let currentEpisodes = [];
 
-        // Initialize Plyr player
-        document.addEventListener('DOMContentLoaded', () => {
-            player = new Plyr('#videoPlayer', {
-                controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'captions', 'settings', 'pip', 'airplay', 'fullscreen'],
-                speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] }
-            });
-        });
+        // Wait for Plyr to load before initializing
+        function initPlayer() {
+            if (typeof Plyr === 'undefined') {
+                setTimeout(initPlayer, 100);
+                return;
+            }
+            
+            const videoElement = document.getElementById('videoPlayer');
+            if (videoElement) {
+                player = new Plyr(videoElement, {
+                    controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'captions', 'settings', 'pip', 'airplay', 'fullscreen'],
+                    speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] }
+                });
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', initPlayer);
 
         async function searchAnime() {
             const query = document.getElementById('searchInput').value.trim();
@@ -126,6 +136,11 @@
 
             try {
                 const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}`);
+                
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                
                 const data = await response.json();
 
                 if (data.results && data.results.length > 0) {
@@ -139,8 +154,8 @@
                     resultsDiv.innerHTML = '<p class="p-4 text-gray-400">No results found</p>';
                 }
             } catch (error) {
-                resultsDiv.innerHTML = `<p class="p-4 text-red-400">Error: ${error.message}</p>`;
                 console.error('Search error:', error);
+                resultsDiv.innerHTML = `<p class="p-4 text-red-400">Error: ${error.message}</p>`;
             }
         }
 
@@ -153,6 +168,11 @@
 
             try {
                 const response = await fetch(`${BACKEND_URL}/info/${id}`);
+                
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                
                 const data = await response.json();
 
                 document.getElementById('animeDescription').textContent = data.description || 'No description available';
@@ -167,8 +187,8 @@
                     episodeSelect.innerHTML = '<option>No episodes found</option>';
                 }
             } catch (error) {
-                document.getElementById('animeDescription').textContent = 'Error loading anime info';
                 console.error('Info error:', error);
+                document.getElementById('animeDescription').textContent = 'Error loading anime info: ' + error.message;
             }
         }
 
@@ -182,24 +202,37 @@
 
             try {
                 const response = await fetch(`${BACKEND_URL}/watch/${episode.id}`);
+                
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                
                 const data = await response.json();
 
                 // Get the first available source
                 if (data.sources && data.sources.length > 0) {
                     const source = data.sources[0];
+                    
+                    if (!player) {
+                        alert('Player not initialized yet. Please wait a moment and try again.');
+                        return;
+                    }
+                    
                     player.source = {
                         type: 'video',
                         sources: [{
                             src: source.url,
-                            type: source.quality || 'video/mp4'
+                            type: 'video/mp4'
                         }]
                     };
+                    
+                    player.play();
                 } else {
                     alert('No sources found for this episode');
                 }
             } catch (error) {
-                alert('Error loading episode: ' + error.message);
                 console.error('Watch error:', error);
+                alert('Error loading episode: ' + error.message);
             } finally {
                 document.getElementById('loading').classList.add('hidden');
             }
@@ -211,7 +244,9 @@
             document.getElementById('animeInfo').classList.add('hidden');
             document.getElementById('searchInput').value = '';
             document.getElementById('searchResults').classList.add('hidden');
-            player.source = { type: 'video', sources: [] };
+            if (player) {
+                player.source = { type: 'video', sources: [] };
+            }
         }
 
         // Search on Enter key
