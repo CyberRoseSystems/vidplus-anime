@@ -97,34 +97,47 @@
             <div class="inline-block loading"></div>
             <p class="text-gray-400 mt-4">Loading stream...</p>
         </div>
+
+        <!-- Status Message -->
+        <div id="statusMessage" class="hidden mt-4 p-3 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-300"></div>
     </main>
 
-    <script src="https://cdn.plyr.io/3.7.10/plyr.js" async></script>
+    <script src="https://cdn.plyr.io/3.7.10/plyr.js"></script>
     <script>
         // Your Railway backend URL
         const BACKEND_URL = 'https://vidplus-anime-production.up.railway.app';
         
-        let player;
+        let player = null;
         let currentAnime = null;
         let currentEpisodes = [];
 
-        // Wait for Plyr to load before initializing
+        // Initialize player once Plyr is loaded
         function initPlayer() {
-            if (typeof Plyr === 'undefined') {
-                setTimeout(initPlayer, 100);
-                return;
-            }
-            
-            const videoElement = document.getElementById('videoPlayer');
-            if (videoElement) {
-                player = new Plyr(videoElement, {
-                    controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'captions', 'settings', 'pip', 'airplay', 'fullscreen'],
-                    speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] }
-                });
+            try {
+                if (typeof Plyr === 'undefined') {
+                    console.log('Plyr not ready yet, retrying...');
+                    setTimeout(initPlayer, 100);
+                    return;
+                }
+                
+                const videoElement = document.getElementById('videoPlayer');
+                if (videoElement && !player) {
+                    player = new Plyr(videoElement, {
+                        controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'captions', 'settings', 'pip', 'airplay', 'fullscreen'],
+                        speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] }
+                    });
+                    console.log('Player initialized successfully');
+                }
+            } catch (error) {
+                console.error('Player init error:', error);
             }
         }
 
-        document.addEventListener('DOMContentLoaded', initPlayer);
+        // Wait for page to load then init player
+        window.addEventListener('load', initPlayer);
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(initPlayer, 500);
+        });
 
         async function searchAnime() {
             const query = document.getElementById('searchInput').value.trim();
@@ -199,6 +212,8 @@
             const episode = currentEpisodes[episodeIdx];
 
             document.getElementById('loading').classList.remove('hidden');
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.classList.add('hidden');
 
             try {
                 const response = await fetch(`${BACKEND_URL}/watch/${episode.id}`);
@@ -214,27 +229,42 @@
                     const source = data.sources[0];
                     
                     if (!player) {
-                        alert('Player not initialized yet. Please wait a moment and try again.');
+                        initPlayer();
+                        setTimeout(() => loadEpisodeWithPlayer(source), 500);
                         return;
                     }
                     
-                    player.source = {
-                        type: 'video',
-                        sources: [{
-                            src: source.url,
-                            type: 'video/mp4'
-                        }]
-                    };
-                    
-                    player.play();
+                    loadEpisodeWithPlayer(source);
                 } else {
-                    alert('No sources found for this episode');
+                    statusDiv.textContent = 'No sources found for this episode';
+                    statusDiv.classList.remove('hidden');
                 }
             } catch (error) {
                 console.error('Watch error:', error);
-                alert('Error loading episode: ' + error.message);
+                statusDiv.textContent = 'Error loading episode: ' + error.message;
+                statusDiv.classList.remove('hidden');
             } finally {
                 document.getElementById('loading').classList.add('hidden');
+            }
+        }
+
+        function loadEpisodeWithPlayer(source) {
+            if (!player) return;
+            
+            try {
+                player.source = {
+                    type: 'video',
+                    sources: [{
+                        src: source.url,
+                        type: 'video/mp4'
+                    }]
+                };
+                
+                player.play().catch(() => {
+                    console.log('Auto-play prevented, video ready to play');
+                });
+            } catch (error) {
+                console.error('Player error:', error);
             }
         }
 
