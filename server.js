@@ -14,10 +14,17 @@ app.get('/search', async (req, res) => {
     const query = req.query.q;
     if (!query) return res.status(400).json({ error: 'Query required' });
 
-    const response = await axios.get(`${CONSUMET_API}/search?query=${query}`);
+    console.log(`Searching for: ${query}`);
+    const response = await axios.get(`${CONSUMET_API}/search?query=${encodeURIComponent(query)}`, {
+      timeout: 10000,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
+    
+    console.log(`Search results for ${query}: ${response.data.results?.length || 0} found`);
     res.json(response.data);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Search error:', error.message);
+    res.status(500).json({ error: error.message || 'Search failed' });
   }
 });
 
@@ -25,10 +32,18 @@ app.get('/search', async (req, res) => {
 app.get('/info/:id', async (req, res) => {
   try {
     const id = req.params.id;
-    const response = await axios.get(`${CONSUMET_API}/info/${id}`);
+    console.log(`Getting info for: ${id}`);
+    
+    const response = await axios.get(`${CONSUMET_API}/info/${encodeURIComponent(id)}`, {
+      timeout: 10000,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
+    
+    console.log(`Got info for ${id}: ${response.data.episodes?.length || 0} episodes`);
     res.json(response.data);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Info error:', error.message);
+    res.status(500).json({ error: error.message || 'Failed to get anime info' });
   }
 });
 
@@ -36,16 +51,24 @@ app.get('/info/:id', async (req, res) => {
 app.get('/watch/:episodeId', async (req, res) => {
   try {
     const episodeId = req.params.episodeId;
-    const response = await axios.get(`${CONSUMET_API}/watch/${episodeId}`);
+    console.log(`Getting watch link for: ${episodeId}`);
+    
+    const response = await axios.get(`${CONSUMET_API}/watch/${encodeURIComponent(episodeId)}`, {
+      timeout: 10000,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
+    
+    console.log(`Got watch link for ${episodeId}: ${response.data.sources?.length || 0} sources`);
     res.json(response.data);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Watch error:', error.message);
+    res.status(500).json({ error: error.message || 'Failed to get streaming link' });
   }
 });
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK' });
+  res.json({ status: 'OK', message: 'Backend is running' });
 });
 
 const PORT = process.env.PORT || 5000;
